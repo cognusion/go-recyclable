@@ -10,8 +10,13 @@ import (
 	"sync"
 )
 
-// ErrTooLarge is returned when ResetFromLimitedReader is used and the supplied Reader writes too much
-var ErrTooLarge = errors.New("read byte count too large")
+var (
+	// ErrTooLarge is returned when ResetFromLimitedReader is used and the supplied Reader writes too much
+	ErrTooLarge = errors.New("read byte count too large")
+	// ErrPointlessClose is returned when a Buffer is Close()d, but has no home to return to.
+	// Safely ignorable if you understand what the previous sentence means.
+	ErrPointlessClose = errors.New("closing a Buffer with no home")
+)
 
 // Buffer is an io.Reader, io.ReadCloser, io.ReaderAt,
 // io.Writer, io.WriterAt, io.WriteCloser, io.WriterTo,
@@ -38,6 +43,9 @@ func NewBuffer(home *BufferPool, bytes []byte) *Buffer {
 // called more than once per Buffer life.
 // Implements `io.Closer` (also `io.ReadCloser` and `io.WriteCloser`)
 func (r *Buffer) Close() error {
+	if r.home == nil {
+		return ErrPointlessClose
+	}
 	r.home.Put(r)
 	return nil
 }

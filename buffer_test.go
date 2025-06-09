@@ -163,6 +163,13 @@ func TestBuffer(t *testing.T) {
 
 }
 
+func Test_BufferPointlessClose(t *testing.T) {
+	Convey("When a Buffer is created outside of a Pool, and it is closed, it doesn't panic and returns the proper error", t, func() {
+		b := &Buffer{}
+		So(b.Close(), ShouldEqual, ErrPointlessClose)
+	})
+}
+
 // Tests grabbing an new RB, using the NewFunc directly
 func BenchmarkRBNewRaw(b *testing.B) {
 

@@ -93,14 +93,18 @@ for i := 0; i < 10; i++ {
 
 ## <a name="pkg-variables">Variables</a>
 ``` go
-var ErrTooLarge = errors.New("read byte count too large")
+var (
+    // ErrTooLarge is returned when ResetFromLimitedReader is used and the supplied Reader writes too much
+    ErrTooLarge = errors.New("read byte count too large")
+    // ErrPointlessClose is returned when a Buffer is Close()d, but has no home to return to.
+    // Safely ignorable if you understand what the previous sentence means.
+    ErrPointlessClose = errors.New("closing a Buffer with no home")
+)
 ```
-ErrTooLarge is returned when ResetFromLimitedReader is used and the supplied Reader writes too much
 
 
 
-
-## <a name="Buffer">type</a> [Buffer](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=803:875#L22)
+## <a name="Buffer">type</a> [Buffer](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1038:1110#L27)
 ``` go
 type Buffer struct {
     bytes.Reader
@@ -121,7 +125,7 @@ the Pool it came from
 
 
 
-### <a name="NewBuffer">func</a> [NewBuffer](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1005:1059#L31)
+### <a name="NewBuffer">func</a> [NewBuffer](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1240:1294#L36)
 ``` go
 func NewBuffer(home *BufferPool, bytes []byte) *Buffer
 ```
@@ -132,7 +136,7 @@ BufferPool.Get() is preferable to calling this directly.
 
 
 
-### <a name="Buffer.Bytes">func</a> (\*Buffer) [Bytes](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2169:2200#L66)
+### <a name="Buffer.Bytes">func</a> (\*Buffer) [Bytes](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2454:2485#L74)
 ``` go
 func (r *Buffer) Bytes() []byte
 ```
@@ -141,7 +145,7 @@ Bytes returns the contents of the buffer, and sets the seek pointer back to the 
 
 
 
-### <a name="Buffer.Close">func</a> (\*Buffer) [Close](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1299:1329#L40)
+### <a name="Buffer.Close">func</a> (\*Buffer) [Close](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1534:1564#L45)
 ``` go
 func (r *Buffer) Close() error
 ```
@@ -152,7 +156,7 @@ Implements `io.Closer` (also `io.ReadCloser` and `io.WriteCloser`)
 
 
 
-### <a name="Buffer.Error">func</a> (\*Buffer) [Error](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2592:2623#L81)
+### <a name="Buffer.Error">func</a> (\*Buffer) [Error](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2877:2908#L89)
 ``` go
 func (r *Buffer) Error() string
 ```
@@ -162,7 +166,7 @@ Implements “error“.
 
 
 
-### <a name="Buffer.ResetFromLimitedReader">func</a> (\*Buffer) [ResetFromLimitedReader](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1841:1915#L54)
+### <a name="Buffer.ResetFromLimitedReader">func</a> (\*Buffer) [ResetFromLimitedReader](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2126:2200#L62)
 ``` go
 func (r *Buffer) ResetFromLimitedReader(reader io.Reader, max int64) error
 ```
@@ -173,7 +177,7 @@ may continue to be used, understanding the contents will be limited
 
 
 
-### <a name="Buffer.ResetFromReader">func</a> (\*Buffer) [ResetFromReader](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1461:1511#L46)
+### <a name="Buffer.ResetFromReader">func</a> (\*Buffer) [ResetFromReader](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1746:1796#L54)
 ``` go
 func (r *Buffer) ResetFromReader(reader io.Reader)
 ```
@@ -182,7 +186,7 @@ ResetFromReader performs a Reset() using the contents of the supplied Reader as 
 
 
 
-### <a name="Buffer.String">func</a> (\*Buffer) [String](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2387:2419#L73)
+### <a name="Buffer.String">func</a> (\*Buffer) [String](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2672:2704#L81)
 ``` go
 func (r *Buffer) String() string
 ```
@@ -191,7 +195,7 @@ String returns the contents of the buffer as a string, and sets the seek pointer
 
 
 
-### <a name="Buffer.Write">func</a> (\*Buffer) [Write](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2731:2782#L87)
+### <a name="Buffer.Write">func</a> (\*Buffer) [Write](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=3016:3067#L95)
 ``` go
 func (r *Buffer) Write(p []byte) (n int, err error)
 ```
@@ -201,7 +205,7 @@ Implements “io.Writer“.
 
 
 
-### <a name="Buffer.WriteAt">func</a> (\*Buffer) [WriteAt](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=3094:3158#L101)
+### <a name="Buffer.WriteAt">func</a> (\*Buffer) [WriteAt](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=3379:3443#L109)
 ``` go
 func (r *Buffer) WriteAt(p []byte, pos int64) (n int, err error)
 ```
