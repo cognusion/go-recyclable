@@ -7,14 +7,15 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"sync"
 )
 
 // ErrTooLarge is returned when ResetFromLimitedReader is used and the supplied Reader writes too much
 var ErrTooLarge = errors.New("read byte count too large")
 
-// Buffer is an io.Reader, io.ReadCloser, io.ReaderAt, io.Writer,
-// io.WriteCloser, io.WriterTo, io.Seeker, io.ByteScanner,
-// io.RuneScanner, and more!
+// Buffer is an io.Reader, io.ReadCloser, io.ReaderAt,
+// io.Writer, io.WriterAt, io.WriteCloser, io.WriterTo,
+// io.Seeker, io.ByteScanner, io.RuneScanner, and more!
 // It's designed to work in coordination with a BufferPool for
 // recycling, and it's `.Close()` method puts itself back in
 // the Pool it came from
@@ -22,6 +23,7 @@ type Buffer struct {
 	bytes.Reader
 
 	home *BufferPool
+	m    sync.Mutex
 }
 
 // NewBuffer returns a Buffer with a proper home. Generally calling
@@ -74,12 +76,14 @@ func (r *Buffer) String() string {
 	return string(b)
 }
 
-// Error returns the contents of the buffer as a string. Implements “error“
+// Error returns the contents of the buffer as a string.
+// Implements “error“.
 func (r *Buffer) Error() string {
 	return r.String()
 }
 
-// Writer adds the bytes the written to the buffer. Implements “io.Writer“
+// Writer adds the bytes the written to the buffer.
+// Implements “io.Writer“.
 func (r *Buffer) Write(p []byte) (n int, err error) {
 	b, err := io.ReadAll(&r.Reader)
 	if err != nil {
@@ -89,4 +93,30 @@ func (r *Buffer) Write(p []byte) (n int, err error) {
 
 	r.Reset(b)
 	return len(p), nil
+}
+
+// WriteAt allows for asynchronous writes at various locations within a buffer.
+// Mixing Write and WriteAt is unlikely to yield the results one expects.
+// Implements "io.WriterAt".
+func (r *Buffer) WriteAt(p []byte, pos int64) (n int, err error) {
+	pLen := len(p)
+	expLen := pos + int64(pLen)
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	b, err := io.ReadAll(&r.Reader)
+	if err != nil {
+		return 0, err
+	}
+	if int64(len(b)) < expLen {
+		if int64(cap(b)) < expLen {
+			newBuf := make([]byte, expLen)
+			copy(newBuf, b)
+			b = newBuf
+		}
+		b = b[:expLen]
+	}
+	copy(b[pos:], p)
+	r.Reset(b)
+	return pLen, nil
 }

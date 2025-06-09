@@ -1,4 +1,5 @@
 
+
 # recyclable
 `import "github.com/cognusion/go-recyclable"`
 
@@ -22,45 +23,45 @@ HOWTO implement a goro-safe BufferPool for Buffers
 rPool := NewBufferPool()
 
 // Let's grab a Buffer
-rb := rPool.Get()
+    rb := rPool.Get()
 
-// And immediately reset the value, as we can't trust it to be empty
+    // And immediately reset the value, as we can't trust it to be empty
 rb.Reset([]byte("Hello World"))
 
 // Unlike most buffers, we can re-read it:
 for i := 0; i < 10; i++ {
-  if string(rb.Bytes()) != "Hello World" {
-    panic("OMG! Can't reread?!!!")
-  }
+    if string(rb.Bytes()) != "Hello World" {
+        panic("OMG! Can't reread?!!!")
+    }
 }
 
 // Or get the string value, if you prefer (and know it's safe)
-for i := 0; i < 10; i++ {
-  if rb.String() != "Hello World" {
-    panic("OMG! Can't reread?!!!")
-  }
-}
+    for i := 0; i < 10; i++ {
+        if rb.String() != "Hello World" {
+            panic("OMG! Can't reread?!!!")
+        }
+    }
 
-// Appending to it as an io.Writer works as well
-io.WriteString(rb, ", nice day?")
-if string(rb.Bytes()) != "Hello World, nice day?" {
-    panic("OMG! Append failed?!")
-}
+    // Appending to it as an io.Writer works as well
+    io.WriteString(rb, ", nice day?")
+    if string(rb.Bytes()) != "Hello World, nice day?" {
+        panic("OMG! Append failed?!")
+    }
 
-// Lastly, when you're all done, just close it.
-rb.Close() // and it will go back into the Pool.
-// Please don't use it anymore. Get a fresh one.
+    // Lastly, when you're all done, just close it.
+    rb.Close() // and it will go back into the Pool.
+    // Please don't use it anymore. Get a fresh one.
 
-rb = rPool.Get() // See, not hard?
-defer rb.Close() // Just remember to close it, unless you're passing it elsewhere
+    rb = rPool.Get() // See, not hard?
+    defer rb.Close() // Just remember to close it, unless you're passing it elsewhere
 
-/* HINTS:
-* Makes awesome ``http.Request.Body``s, especially since they get automatically ``.Close()``d when done with
-* Replaces ``bytes.Buffer`` and ``bytes.Reader`` for most uses
-* Isa Stringer and an error
-* As a Writer and a Reader can be used in pipes and elsewhere
-  * You can also pipe them to themselves, but that is a very bad idea unless you love watching OOMs
-*/
+    /* HINTS:
+    * Makes awesome ``http.Request.Body``s, especially since they get automatically ``.Close()``d when done with
+    * Replaces ``bytes.Buffer`` and ``bytes.Reader`` for most uses
+    * Isa Stringer and an error
+    * As a Writer and a Reader can be used in pipes and elsewhere
+      * You can also pipe them to themselves, but that is a very bad idea unless you love watching OOMs
+    */
 ```
 
 
@@ -76,6 +77,7 @@ defer rb.Close() // Just remember to close it, unless you're passing it elsewher
   * [func (r *Buffer) ResetFromReader(reader io.Reader)](#Buffer.ResetFromReader)
   * [func (r *Buffer) String() string](#Buffer.String)
   * [func (r *Buffer) Write(p []byte) (n int, err error)](#Buffer.Write)
+  * [func (r *Buffer) WriteAt(p []byte, pos int64) (n int, err error)](#Buffer.WriteAt)
 * [type BufferPool](#BufferPool)
   * [func NewBufferPool() *BufferPool](#NewBufferPool)
   * [func (p *BufferPool) Get() *Buffer](#BufferPool.Get)
@@ -98,7 +100,7 @@ ErrTooLarge is returned when ResetFromLimitedReader is used and the supplied Rea
 
 
 
-## <a name="Buffer">type</a> [Buffer](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=782:837#L21)
+## <a name="Buffer">type</a> [Buffer](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=803:875#L22)
 ``` go
 type Buffer struct {
     bytes.Reader
@@ -106,9 +108,9 @@ type Buffer struct {
 }
 
 ```
-Buffer is an io.Reader, io.ReadCloser, io.ReaderAt, io.Writer,
-io.WriteCloser, io.WriterTo, io.Seeker, io.ByteScanner,
-io.RuneScanner, and more!
+Buffer is an io.Reader, io.ReadCloser, io.ReaderAt,
+io.Writer, io.WriterAt, io.WriteCloser, io.WriterTo,
+io.Seeker, io.ByteScanner, io.RuneScanner, and more!
 It's designed to work in coordination with a BufferPool for
 recycling, and it's `.Close()` method puts itself back in
 the Pool it came from
@@ -119,7 +121,7 @@ the Pool it came from
 
 
 
-### <a name="NewBuffer">func</a> [NewBuffer](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=967:1021#L29)
+### <a name="NewBuffer">func</a> [NewBuffer](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1005:1059#L31)
 ``` go
 func NewBuffer(home *BufferPool, bytes []byte) *Buffer
 ```
@@ -130,7 +132,7 @@ BufferPool.Get() is preferable to calling this directly.
 
 
 
-### <a name="Buffer.Bytes">func</a> (\*Buffer) [Bytes](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2131:2162#L64)
+### <a name="Buffer.Bytes">func</a> (\*Buffer) [Bytes](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2169:2200#L66)
 ``` go
 func (r *Buffer) Bytes() []byte
 ```
@@ -139,7 +141,7 @@ Bytes returns the contents of the buffer, and sets the seek pointer back to the 
 
 
 
-### <a name="Buffer.Close">func</a> (\*Buffer) [Close](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1261:1291#L38)
+### <a name="Buffer.Close">func</a> (\*Buffer) [Close](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1299:1329#L40)
 ``` go
 func (r *Buffer) Close() error
 ```
@@ -150,16 +152,17 @@ Implements `io.Closer` (also `io.ReadCloser` and `io.WriteCloser`)
 
 
 
-### <a name="Buffer.Error">func</a> (\*Buffer) [Error](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2550:2581#L78)
+### <a name="Buffer.Error">func</a> (\*Buffer) [Error](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2592:2623#L81)
 ``` go
 func (r *Buffer) Error() string
 ```
-Error returns the contents of the buffer as a string. Implements “error“
+Error returns the contents of the buffer as a string.
+Implements “error“.
 
 
 
 
-### <a name="Buffer.ResetFromLimitedReader">func</a> (\*Buffer) [ResetFromLimitedReader](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1803:1877#L52)
+### <a name="Buffer.ResetFromLimitedReader">func</a> (\*Buffer) [ResetFromLimitedReader](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1841:1915#L54)
 ``` go
 func (r *Buffer) ResetFromLimitedReader(reader io.Reader, max int64) error
 ```
@@ -170,7 +173,7 @@ may continue to be used, understanding the contents will be limited
 
 
 
-### <a name="Buffer.ResetFromReader">func</a> (\*Buffer) [ResetFromReader](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1423:1473#L44)
+### <a name="Buffer.ResetFromReader">func</a> (\*Buffer) [ResetFromReader](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=1461:1511#L46)
 ``` go
 func (r *Buffer) ResetFromReader(reader io.Reader)
 ```
@@ -179,7 +182,7 @@ ResetFromReader performs a Reset() using the contents of the supplied Reader as 
 
 
 
-### <a name="Buffer.String">func</a> (\*Buffer) [String](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2349:2381#L71)
+### <a name="Buffer.String">func</a> (\*Buffer) [String](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2387:2419#L73)
 ``` go
 func (r *Buffer) String() string
 ```
@@ -188,11 +191,23 @@ String returns the contents of the buffer as a string, and sets the seek pointer
 
 
 
-### <a name="Buffer.Write">func</a> (\*Buffer) [Write](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2685:2736#L83)
+### <a name="Buffer.Write">func</a> (\*Buffer) [Write](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=2731:2782#L87)
 ``` go
 func (r *Buffer) Write(p []byte) (n int, err error)
 ```
-Writer adds the bytes the written to the buffer. Implements “io.Writer“
+Writer adds the bytes the written to the buffer.
+Implements “io.Writer“.
+
+
+
+
+### <a name="Buffer.WriteAt">func</a> (\*Buffer) [WriteAt](https://github.com/cognusion/go-recyclable/tree/master/buffer.go?s=3094:3158#L101)
+``` go
+func (r *Buffer) WriteAt(p []byte, pos int64) (n int, err error)
+```
+WriteAt allows for asynchronous writes at various locations within a buffer.
+Mixing Write and WriteAt is unlikely to yield the results one expects.
+Implements "io.WriterAt".
 
 
 
@@ -248,4 +263,4 @@ preferable to calling this directly.
 
 
 - - -
-Generated by [godoc2md](http://godoc.org/github.com/cognusion/godoc2md)
+Generated by [godoc2md](http://github.com/cognusion/godoc2md)

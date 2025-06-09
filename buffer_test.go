@@ -1,11 +1,12 @@
 package recyclable
 
 import (
-	. "github.com/smartystreets/goconvey/convey"
-
 	"bytes"
 	"io"
+	"sync"
 	"testing"
+
+	. "github.com/smartystreets/goconvey/convey"
 )
 
 // HOWTO implement a goro-safe BufferPool for Buffers
@@ -119,6 +120,45 @@ func TestBuffer(t *testing.T) {
 				So(func() { rb.Close() }, ShouldNotPanic)
 			})
 		})
+	})
+
+	Convey("Using it as a WriterAt, with concurrent writes, works as expected.", t, func(c C) {
+		buff := &Buffer{}
+
+		// longSize is large to force the underlying buffer to need reallocation, so we
+		// confirm it works as expected.
+		longSize := 100
+
+		wg := sync.WaitGroup{}
+
+		alphabet := []byte("abcdefghijklmnopqrst")
+		var longAlphabet = make([]byte, 0)
+		for range longSize {
+			longAlphabet = append(longAlphabet, alphabet...)
+		}
+
+		// Write lowercase letters a-t into the buffer, individually, concurrently.
+		for i := 97; i < 117; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+
+				b := make([]byte, 1)
+				b[0] = byte(i)
+				_, err := buff.WriteAt(b, int64(i-97))
+				c.So(err, ShouldBeNil)
+			}(i)
+		}
+		wg.Wait()
+		c.So(buff.Bytes(), ShouldResemble, alphabet)
+
+		// Write the lowercase letters a-t as a set, longSize number of times, sequentially,
+		// to test reallocation.
+		for i := range longSize {
+			_, err := buff.WriteAt(alphabet, int64(i*20))
+			c.So(err, ShouldBeNil)
+		}
+		c.So(buff.Bytes(), ShouldResemble, longAlphabet)
 	})
 
 }
