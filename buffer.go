@@ -20,7 +20,8 @@ var (
 
 // Buffer is an io.Reader, io.ReadCloser, io.ReaderAt,
 // io.Writer, io.WriterAt, io.WriteCloser, io.WriterTo,
-// io.Seeker, io.ByteScanner, io.RuneScanner, and more!
+// io.Seeker, io.ByteScanner, io.RuneScanner, fmt.Stringer,
+// error, and probably more!
 // It's designed to work in coordination with a BufferPool for
 // recycling, and it's `.Close()` method puts itself back in
 // the Pool it came from

@@ -2,6 +2,7 @@ package recyclable
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"sync"
 	"testing"
@@ -24,14 +25,14 @@ func Example() {
 	rb.Reset([]byte("Hello World"))
 
 	// Unlike most buffers, we can re-read it:
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if string(rb.Bytes()) != "Hello World" {
 			panic("OMG! Can't reread?!!!")
 		}
 	}
 
 	// Or get the string value, if you prefer (and know it's safe)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if rb.String() != "Hello World" {
 			panic("OMG! Can't reread?!!!")
 		}
@@ -76,7 +77,7 @@ func TestBuffer(t *testing.T) {
 			So(rb.String(), ShouldEqual, "Hello World")
 
 			Convey("And re-reading from it multiple times works too", func() {
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					So(rb.Bytes(), ShouldResemble, []byte("Hello World"))
 				}
 			})
@@ -167,6 +168,24 @@ func Test_BufferPointlessClose(t *testing.T) {
 	Convey("When a Buffer is created outside of a Pool, and it is closed, it doesn't panic and returns the proper error", t, func() {
 		b := &Buffer{}
 		So(b.Close(), ShouldEqual, ErrPointlessClose)
+	})
+}
+
+func Test_BufferInterfacesOhMy(t *testing.T) {
+	Convey("When a Buffer it type checked against various interfaces, it passes", t, FailureContinues, func() {
+		b := &Buffer{}
+		So(b, ShouldImplement, (*io.Reader)(nil))
+		So(b, ShouldImplement, (*io.ReadCloser)(nil))
+		So(b, ShouldImplement, (*io.ReaderAt)(nil))
+		So(b, ShouldImplement, (*io.Writer)(nil))
+		So(b, ShouldImplement, (*io.WriterAt)(nil))
+		So(b, ShouldImplement, (*io.WriteCloser)(nil))
+		So(b, ShouldImplement, (*io.WriterTo)(nil))
+		So(b, ShouldImplement, (*io.Seeker)(nil))
+		So(b, ShouldImplement, (*io.ByteScanner)(nil))
+		So(b, ShouldImplement, (*io.RuneScanner)(nil))
+		So(b, ShouldImplement, (*error)(nil))
+		So(b, ShouldImplement, (*fmt.Stringer)(nil))
 	})
 }
 
