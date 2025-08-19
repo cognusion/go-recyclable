@@ -177,6 +177,8 @@ func Test_BufferInterfacesOhMy(t *testing.T) {
 		So(b, ShouldImplement, (*io.Reader)(nil))
 		So(b, ShouldImplement, (*io.ReadCloser)(nil))
 		So(b, ShouldImplement, (*io.ReaderAt)(nil))
+		So(b, ShouldImplement, (*io.ReadSeeker)(nil))
+		So(b, ShouldImplement, (*io.ReadSeekCloser)(nil))
 		So(b, ShouldImplement, (*io.Writer)(nil))
 		So(b, ShouldImplement, (*io.WriterAt)(nil))
 		So(b, ShouldImplement, (*io.WriteCloser)(nil))
