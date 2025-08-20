@@ -164,6 +164,25 @@ func TestBuffer(t *testing.T) {
 
 }
 
+func Test_NewBufferWithBytes(t *testing.T) {
+	Convey("When a Buffer is created with NewBuffer, and given a []byte", t, func() {
+		iteotwawki := "It's the end of the world as we know it. And I feel fine."
+		bs := []byte(iteotwawki)
+		b := NewBuffer(nil, bs)
+		Convey("It can regurgitate the []byte just fine.", func() {
+			So(b.String(), ShouldEqual, iteotwawki)
+		})
+	})
+
+	Convey("When a Buffer is created with NewBuffer, and given a nil []byte", t, func() {
+		b := NewBuffer(nil, nil)
+		Convey("Nothing explodes, and zero values are returned.", func() {
+			So(b.String(), ShouldBeZeroValue)
+			So(b.Bytes(), ShouldBeEmpty)
+		})
+	})
+}
+
 func Test_BufferPointlessClose(t *testing.T) {
 	Convey("When a Buffer is created outside of a Pool, and it is closed, it doesn't panic and returns the proper error", t, func() {
 		b := &Buffer{}

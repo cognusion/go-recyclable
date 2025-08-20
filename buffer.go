@@ -35,9 +35,11 @@ type Buffer struct {
 // NewBuffer returns a Buffer with a proper home. Generally calling
 // BufferPool.Get() is preferable to calling this directly.
 func NewBuffer(home *BufferPool, bytes []byte) *Buffer {
-	return &Buffer{
+	b := &Buffer{
 		home: home,
 	}
+	b.Reset(bytes)
+	return b
 }
 
 // Close puts itself back in the Pool it came from. This should absolutely **never** be
