@@ -115,6 +115,8 @@ func (r *Buffer) WriteAt(p []byte, pos int64) (n int, err error) {
 	r.m.Lock()
 	defer r.m.Unlock()
 
+	// r.Bytes() would be the logical here, except it calls io.ReadAll
+	// and then a superfluous seek, while swallowing a nigh-impossible error.
 	b, err := io.ReadAll(&r.Reader)
 	if err != nil {
 		return 0, err
