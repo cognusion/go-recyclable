@@ -106,6 +106,12 @@ func (r *Buffer) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+// WriteString adds the string to the buffer.
+// Implements "io.StringWriter"
+func (r *Buffer) WriteString(s string) (n int, err error) {
+	return r.Write([]byte(s))
+}
+
 // WriteAt allows for asynchronous writes at various locations within a buffer.
 // Mixing Write and WriteAt is unlikely to yield the results one expects.
 // Implements "io.WriterAt".

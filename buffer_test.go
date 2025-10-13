@@ -207,6 +207,7 @@ func Test_BufferInterfacesOhMy(t *testing.T) {
 		So(b, ShouldImplement, (*io.RuneScanner)(nil))
 		So(b, ShouldImplement, (*error)(nil))
 		So(b, ShouldImplement, (*fmt.Stringer)(nil))
+		So(b, ShouldImplement, (*io.StringWriter)(nil))
 	})
 }
 
