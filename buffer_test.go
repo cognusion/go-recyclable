@@ -310,3 +310,46 @@ func BenchmarkWrite(b *testing.B) {
 		r.Reset(hello)
 	}
 }
+
+func BenchmarkBBWrite(b *testing.B) {
+	r := bytes.NewBufferString("Hello World")
+
+	var ok = []byte("ok")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r.Write(ok)
+		r.Reset()
+	}
+}
+
+func BenchmarkWrite1000(b *testing.B) {
+	r := NewBuffer(nil, make([]byte, 0))
+	r.Reset([]byte("Hello World"))
+
+	var ok = []byte("ok")
+	var hello = []byte("Hello World")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for range 1000 {
+			r.Write(ok)
+		}
+		r.Reset(hello)
+	}
+}
+
+func BenchmarkBBWrite1000(b *testing.B) {
+	r := bytes.NewBuffer([]byte("Hello World"))
+
+	var ok = []byte("ok")
+	//	var hello = []byte("Hello World")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for range 1000 {
+			r.Write(ok)
+		}
+		r.Reset()
+	}
+}
