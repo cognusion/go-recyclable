@@ -11,7 +11,7 @@ type BufferPool struct {
 func NewBufferPool() *BufferPool {
 	var b BufferPool
 	b.pool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return NewBuffer(&b, make([]byte, 0))
 		},
 	}
@@ -19,7 +19,7 @@ func NewBufferPool() *BufferPool {
 }
 
 // Get will return an existing Buffer or a new one if the pool is empty.
-// REMEMBER to Reset the Buffer and don't just start using it, as it
+// REMEMBER to Reset or Empty the Buffer and don't just start using it, as it
 // may very well have old data in it!
 func (p *BufferPool) Get() *Buffer {
 	return p.pool.Get().(*Buffer)

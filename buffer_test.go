@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/fortytw2/leaktest"
 	. "github.com/smartystreets/goconvey/convey"
 )
 
@@ -50,6 +51,7 @@ func Example() {
 
 	rb = rPool.Get() // See, not hard?
 	defer rb.Close() // Just remember to close it, unless you're passing it elsewhere
+	rb.Empty()       // Ready to go
 
 	/* HINTS:
 	* Makes awesome ``http.Request.Body``s, especially since they get automatically ``.Close()``d when done with
@@ -62,14 +64,14 @@ func Example() {
 }
 
 func TestBuffer(t *testing.T) {
+	defer leaktest.Check(t)()
 
 	rPool := NewBufferPool()
 
 	Convey("When a Buffer is fetched from a BufferPool, it is a Buffer", t, func() {
-		rbx := rPool.Get()
-		So(rbx, ShouldHaveSameTypeAs, &Buffer{})
-
 		rb := rPool.Get()
+		So(rb, ShouldHaveSameTypeAs, &Buffer{})
+
 		Convey("And setting it appears correct", func() {
 			rb.Reset([]byte("Hello World"))
 			So(rb.Bytes(), ShouldResemble, []byte("Hello World"))
@@ -121,16 +123,33 @@ func TestBuffer(t *testing.T) {
 				So(func() { rb.Close() }, ShouldNotPanic)
 			})
 		})
+
+		Convey("And getting it or a new one appears correct", func() {
+			nrb := rPool.Get()
+			nrb.Empty()
+
+			n, err := nrb.Write([]byte("Hello World"))
+			So(err, ShouldBeNil)
+			So(n, ShouldEqual, 11)
+			So(nrb.Len(), ShouldEqual, 11)
+			So(nrb.Bytes(), ShouldResemble, []byte("Hello World"))
+
+			err = nrb.Close()
+			So(err, ShouldBeNil)
+		})
+
 	})
 
-	Convey("Using it as a WriterAt, with concurrent writes, works as expected.", t, func(c C) {
-		buff := &Buffer{}
+	Convey("Using it as a WriterAt, with concurrent writes and subsequent concurrent ReadAts, work as expected.", t, func(c C) {
+		buff := rPool.Get()
+		buff.Empty()
 
 		// longSize is large to force the underlying buffer to need reallocation, so we
 		// confirm it works as expected.
 		longSize := 100
 
 		wg := sync.WaitGroup{}
+		wgr := sync.WaitGroup{}
 
 		alphabet := []byte("abcdefghijklmnopqrst")
 		var longAlphabet = make([]byte, 0)
@@ -138,28 +157,53 @@ func TestBuffer(t *testing.T) {
 			longAlphabet = append(longAlphabet, alphabet...)
 		}
 
+		wDone := make(chan struct{})
+
 		// Write lowercase letters a-t into the buffer, individually, concurrently.
 		for i := 97; i < 117; i++ {
 			wg.Add(1)
+			wgr.Add(1)
+
+			// WriteAt
 			go func(i int) {
 				defer wg.Done()
 
 				b := make([]byte, 1)
 				b[0] = byte(i)
-				_, err := buff.WriteAt(b, int64(i-97))
+				n, err := buff.WriteAt(b, int64(i-97))
 				c.So(err, ShouldBeNil)
+				c.So(n, ShouldEqual, 1)
 			}(i)
+
+			// ReadAt
+			go func(i int, d chan struct{}) {
+				defer wgr.Done()
+
+				b := make([]byte, 1)
+				<-d
+				n, err := buff.ReadAt(b, int64(i-97)) // ReadAt doesn't change state, and does internal copying.
+				c.So(err, ShouldBeNil)
+				c.So(n, ShouldEqual, 1)
+				c.So(b[0], ShouldEqual, byte(i))
+
+			}(i, wDone)
 		}
-		wg.Wait()
+		wg.Wait() // wait for the WriterAts
+		close(wDone)
+		wgr.Wait() // wait for the ReaderAts
+
 		c.So(buff.Bytes(), ShouldResemble, alphabet)
+
+		buff.Empty()
 
 		// Write the lowercase letters a-t as a set, longSize number of times, sequentially,
 		// to test reallocation.
 		for i := range longSize {
-			_, err := buff.WriteAt(alphabet, int64(i*20))
+			n, err := buff.WriteAt(alphabet, int64(i*20))
 			c.So(err, ShouldBeNil)
+			c.So(n, ShouldEqual, len(alphabet))
 		}
-		c.So(buff.Bytes(), ShouldResemble, longAlphabet)
+		c.So(buff.String(), ShouldEqual, string(longAlphabet))
 	})
 
 }
@@ -190,24 +234,88 @@ func Test_BufferPointlessClose(t *testing.T) {
 	})
 }
 
+func Test_BufferMixedReadsWrites(t *testing.T) {
+	testString := "This is not a short string, and will be cut into ranges sometimes but not others"
+	b := NewBuffer(nil, nil)
+	Convey("When a Buffer is created, and given a mix of read and write operations, everything ends okay", t, FailureContinues, func() {
+		n, err := b.WriteString(testString)
+		So(err, ShouldBeNil)
+		So(n, ShouldEqual, len(testString))
+		So(b.Len(), ShouldEqual, n)
+		SoMsg("First string read failed", b.String(), ShouldEqual, testString)
+		SoMsg("Second string read failed", b.String(), ShouldEqual, testString)
+
+		// Add a period.
+		n, err = b.Write([]byte("."))
+		So(err, ShouldBeNil)
+		So(n, ShouldEqual, 1)
+		So(b.Len(), ShouldEqual, n+len(testString))
+		SoMsg("First string read failed", b.String(), ShouldEqual, testString+".")
+		SoMsg("Second string read failed", b.String(), ShouldEqual, testString+".")
+
+		// Drain the buffer.
+		ab, err := io.ReadAll(b)
+		So(err, ShouldBeNil)
+		So(len(ab), ShouldEqual, len(testString)+1)
+		So(string(ab), ShouldEqual, testString+".")
+
+		// Seek the beginning
+		i, err := b.Seek(0, 0)
+		So(err, ShouldBeNil)
+		So(i, ShouldEqual, 0)
+
+		// Check the buffer
+		So(b.Len(), ShouldEqual, len(testString)+1)
+		SoMsg("First string read failed", b.String(), ShouldEqual, testString+".")
+		SoMsg("Second string read failed", b.String(), ShouldEqual, testString+".")
+
+		// Add a period.
+		n, err = b.Write([]byte("."))
+		So(err, ShouldBeNil)
+		So(n, ShouldEqual, 1)
+		So(b.Len(), ShouldEqual, 2+len(testString))
+		SoMsg("First string read failed", b.String(), ShouldEqual, testString+"..")
+		SoMsg("Second string read failed", b.String(), ShouldEqual, testString+"..")
+
+		// Drain the buffer.
+		ab, err = io.ReadAll(b)
+		So(err, ShouldBeNil)
+		So(len(ab), ShouldEqual, len(testString)+2)
+		So(string(ab), ShouldEqual, testString+"..")
+	})
+}
+
 func Test_BufferInterfacesOhMy(t *testing.T) {
 	Convey("When a Buffer it type checked against various interfaces, it passes", t, FailureContinues, func() {
 		b := &Buffer{}
+		So(b, ShouldImplement, (*io.ByteReader)(nil))
+		So(b, ShouldImplement, (*io.ByteScanner)(nil))
+		So(b, ShouldImplement, (*io.ByteWriter)(nil))
+		So(b, ShouldImplement, (*io.Closer)(nil))
+
 		So(b, ShouldImplement, (*io.Reader)(nil))
 		So(b, ShouldImplement, (*io.ReadCloser)(nil))
 		So(b, ShouldImplement, (*io.ReaderAt)(nil))
+		So(b, ShouldImplement, (*io.ReaderFrom)(nil))
 		So(b, ShouldImplement, (*io.ReadSeeker)(nil))
 		So(b, ShouldImplement, (*io.ReadSeekCloser)(nil))
+		So(b, ShouldImplement, (*io.ReadWriteCloser)(nil))
+		So(b, ShouldImplement, (*io.ReadWriteSeeker)(nil))
+		So(b, ShouldImplement, (*io.ReadWriter)(nil))
+
+		//So(b, ShouldImplement, (*io.RuneScanner)(nil))
+
+		So(b, ShouldImplement, (*io.Seeker)(nil))
+		So(b, ShouldImplement, (*io.StringWriter)(nil))
+
 		So(b, ShouldImplement, (*io.Writer)(nil))
 		So(b, ShouldImplement, (*io.WriterAt)(nil))
 		So(b, ShouldImplement, (*io.WriteCloser)(nil))
+		So(b, ShouldImplement, (*io.WriteSeeker)(nil))
 		So(b, ShouldImplement, (*io.WriterTo)(nil))
-		So(b, ShouldImplement, (*io.Seeker)(nil))
-		So(b, ShouldImplement, (*io.ByteScanner)(nil))
-		So(b, ShouldImplement, (*io.RuneScanner)(nil))
+
 		So(b, ShouldImplement, (*error)(nil))
 		So(b, ShouldImplement, (*fmt.Stringer)(nil))
-		So(b, ShouldImplement, (*io.StringWriter)(nil))
 	})
 }
 
@@ -285,6 +393,16 @@ func BenchmarkBytes(b *testing.B) {
 	}
 }
 
+func BenchmarkEmpty(b *testing.B) {
+	r := NewBuffer(nil, make([]byte, 0))
+	r.Reset([]byte("Hello World"))
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r.Empty()
+	}
+}
+
 func BenchmarkReset(b *testing.B) {
 	r := NewBuffer(nil, make([]byte, 0))
 	r.Reset([]byte("Hello World"))
@@ -302,12 +420,11 @@ func BenchmarkWrite(b *testing.B) {
 	r.Reset([]byte("Hello World"))
 
 	var ok = []byte("ok")
-	var hello = []byte("Hello World")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r.Write(ok)
-		r.Reset(hello)
+		r.Empty()
 	}
 }
 
@@ -328,14 +445,13 @@ func BenchmarkWrite1000(b *testing.B) {
 	r.Reset([]byte("Hello World"))
 
 	var ok = []byte("ok")
-	var hello = []byte("Hello World")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for range 1000 {
 			r.Write(ok)
 		}
-		r.Reset(hello)
+		r.Empty()
 	}
 }
 
@@ -343,7 +459,6 @@ func BenchmarkBBWrite1000(b *testing.B) {
 	r := bytes.NewBuffer([]byte("Hello World"))
 
 	var ok = []byte("ok")
-	//	var hello = []byte("Hello World")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
