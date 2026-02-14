@@ -412,7 +412,8 @@ func (r *Buffer) WriteByte(c byte) error {
 // if it becomes too large, WriteRune will panic with [ErrTooLarge].
 func (r *Buffer) WriteRune(p rune) (n int, err error) {
 	// Compare as uint32 to correctly handle negative runes.
-	if uint32(p) < utf8.RuneSelf {
+	if int32(p) < utf8.RuneSelf {
+		//#nosec G115 -- We ensured that the value of p is less than 128 previously, thus fits in a byte without overflow.
 		r.WriteByte(byte(p))
 		return 1, nil
 	}
